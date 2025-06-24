@@ -94,10 +94,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlin.math.max
 import kotlin.math.min
+
+data class DetectionPayload(
+    val detections: List<DetectionObject>,
+    val overviewImage: String // overview image of the whole scene
+)
 
 object CameraSdk {
     @Composable
@@ -107,6 +114,17 @@ object CameraSdk {
 
     fun launchCamera(context: Context, modelType: ModelType = ModelType.DEFAULT) {
         CameraActivity.start(context, modelType)
+    }
+}
+
+object DetectionManager {
+    private val _detectionPayload = MutableStateFlow(
+        DetectionPayload(emptyList(), "")
+    )
+    val detectionPayload: StateFlow<DetectionPayload> get() = _detectionPayload
+
+    fun updateDetections(newPayload: DetectionPayload) {
+        _detectionPayload.value = newPayload
     }
 }
 
@@ -391,26 +409,42 @@ fun CameraPreview(
                 }
             )
         // --- Overlay Buttons ---
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(70.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column (
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .padding(50.dp)
         ) {
-            Button(onClick = { isScanning = !isScanning }, modifier = Modifier.widthIn(min = 100.dp)) {
-                Text(if (isScanning) "Stop" else "Start")
-            }
+            Row(
+                modifier = Modifier
+                    .padding(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = { isScanning = !isScanning },
+                    modifier = Modifier.widthIn(min = 100.dp)
+                ) {
+                    Text(if (isScanning) "Stop" else "Start")
+                }
 
+                Button(
+                    onClick = {
+                        synchronized(objectResultsAll) { objectResultsAll.clear() }
+                        synchronized(shelfResultsAll) { shelfResultsAll.clear() }
+                        synchronized(labelResultsAll) { labelResultsAll.clear() }
+                    }, modifier = Modifier.widthIn(min = 100.dp)
+                ) {
+                    Text("Reset")
+                }
+            }
             Button(
                 onClick = {
-                    Log.d("Button", "Reset button pressed")
-                    synchronized(objectResultsAll) { objectResultsAll.clear() }
-                    synchronized(shelfResultsAll) { shelfResultsAll.clear() }
-                    synchronized(labelResultsAll) { labelResultsAll.clear() }
-                }, modifier = Modifier.widthIn(min = 100.dp)
+                    coroutineScope.cancel()
+                    DetectionManager.updateDetections(DetectionPayload(emptyList(), "end"))
+                },
+                modifier = Modifier.widthIn(min = 100.dp)
             ) {
-                Text("Reset")
+                Text("Finish")
             }
         }
     }
