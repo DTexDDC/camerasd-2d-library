@@ -8,9 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Bundle
 import android.util.Log
 import android.util.Size
 import android.view.Surface
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
@@ -100,6 +103,32 @@ object CameraSdk {
     @Composable
     fun StartDetection(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelType = ModelType.DEFAULT) {
         CameraScreen(modifier = modifier, modelType = modelType)
+    }
+
+    fun launchCamera(context: Context, modelType: ModelType = ModelType.DEFAULT) {
+        CameraActivity.start(context, modelType)
+    }
+}
+
+class CameraActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val modelType = intent?.getSerializableExtra(EXTRA_MODEL_TYPE) as? ModelType ?: ModelType.DEFAULT
+
+        setContent {
+            CameraSdk.StartDetection(modelType = modelType)
+        }
+    }
+
+    companion object {
+        private const val EXTRA_MODEL_TYPE = "extra_model_type"
+
+        fun start(context: Context, modelType: ModelType = ModelType.DEFAULT) {
+            val intent = Intent(context, CameraActivity::class.java)
+            intent.putExtra(EXTRA_MODEL_TYPE, modelType)
+            context.startActivity(intent)
+        }
     }
 }
 
