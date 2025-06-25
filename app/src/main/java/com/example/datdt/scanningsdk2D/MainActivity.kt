@@ -1,9 +1,11 @@
 package com.example.datdt.scanningsdk2D
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,29 +25,53 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            val navController = rememberNavController()
 
-            NavHost(
-                navController = navController,
-                startDestination = "camera"
-            ) {
-//                composable("demo") {
-//                    DemoScreen(navController = navController)
-//                }
-                composable(
-                    route ="camera",
-                ) {
-                    val modelType = it.savedStateHandle.get<ModelType>("type") ?: ModelType.OUTPUT_FLOAT32
-                    CameraScreen(modifier = Modifier.fillMaxSize() , modelType = modelType)
+        // Start detection using the SDK
+        DetectionSdk
+            .with(this)
+            //.model(ModelType.OUTPUT_FLOAT32)  // Optional, defaults to DEFAULT
+            .start()
+
+        // Listen for detection results
+        observeDetections()
+    }
+
+    private fun observeDetections() {
+        // Collect detection results from DetectionManager
+        lifecycleScope.launch {
+            DetectionManager.detectionPayload.collect { payload ->
+
+                if (payload.overviewImage == "end") {
+                    // Handle SDK completion
+
+                    // Example: Finish activity
+                    finish()
+                } else {
+                    // Handle detection results (list of detections or image)
+                    handleDetectionResults(payload)
                 }
             }
         }
+    }
+
+    private fun handleDetectionResults(payload: DetectionPayload) {
+        // Example: Log detections (You should process them as before)
+        // for (detection in payload.detections) {
+        // detection.bay
+        // detection.shelf
+        // detection.facing
+        // detection.label
+        // detection.cropString
+        // }
+        Log.d("Detection", "Detected objects: ${payload.detections.size}")
+        Log.d("Detection", "Overview image path: ${payload.overviewImage}")
     }
 }
 

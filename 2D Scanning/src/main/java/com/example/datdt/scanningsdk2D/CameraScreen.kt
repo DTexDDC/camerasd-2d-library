@@ -106,6 +106,26 @@ data class DetectionPayload(
     val overviewImage: String // overview image of the whole scene
 )
 
+object DetectionSdk {
+
+    fun with(context: Context): Builder {
+        return Builder(context)
+    }
+
+    class Builder(private val context: Context) {
+        private var modelType: ModelType = ModelType.DEFAULT
+
+        fun model(modelType: ModelType): Builder {
+            this.modelType = modelType
+            return this
+        }
+
+        fun start() {
+            CameraSdk.launchCamera(context, modelType)
+        }
+    }
+}
+
 object CameraSdk {
     @Composable
     fun StartDetection(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelType = ModelType.DEFAULT) {
@@ -441,6 +461,7 @@ fun CameraPreview(
                 onClick = {
                     coroutineScope.cancel()
                     DetectionManager.updateDetections(DetectionPayload(emptyList(), "end"))
+                    Log.d("Finish", "Finished SDK")
                 },
                 modifier = Modifier.widthIn(min = 100.dp)
             ) {

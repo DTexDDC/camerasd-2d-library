@@ -55,6 +55,7 @@ dependencies {
 
     implementation ("androidx.navigation:navigation-runtime-ktx:2.5.0")
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.appcompat)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

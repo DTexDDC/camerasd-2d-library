@@ -19,6 +19,7 @@ cameraLifecycle = "1.4.1"
 cameraView = "1.4.1"
 core = "1.48.0"
 navigationComposeVersion = "2.8.9"
+appcompatVersion = "1.7.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycl
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraView" }
 core = { group = "com.google.ar", name = "core", version.ref = "core" }
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationComposeVersion" }
+appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompatVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
