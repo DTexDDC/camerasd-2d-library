@@ -21,12 +21,20 @@ import com.example.datdt.scanningsdk2D.CameraScreen
 import com.example.datdt.scanningsdk2D.models.ModelType
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.time.debounce
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 
 class MainActivity : AppCompatActivity() {
 
@@ -45,33 +53,34 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeDetections() {
         // Collect detection results from DetectionManager
-        lifecycleScope.launch {
-            DetectionManager.detectionPayload.collect { payload ->
-
-                if (payload.overviewImage == "end") {
-                    // Handle SDK completion
-
-                    // Example: Finish activity
-                    finish()
-                } else {
-                    // Handle detection results (list of detections or image)
-                    handleDetectionResults(payload)
-                }
-            }
+        CoroutineScope(Dispatchers.Main).launch {
+                DetectionManager.detectionPayload
+                    .collect { payload ->
+                        if (payload.detections.size == 0) {
+                            // Handle SDK completion
+                            Log.d("Main", "No detections")
+                            // Example: Finish activity
+                            finish()
+                        } else {
+                            // Handle detection results (list of detections or image)
+                            Log.d("Main", "Yes detections")
+                            handleDetectionResults(payload)
+                        }
+                    }
         }
     }
 
     private fun handleDetectionResults(payload: DetectionPayload) {
         // Example: Log detections (You should process them as before)
-        // for (detection in payload.detections) {
+         for (detection in payload.detections) {
+             Log.d("Main", "${detection.facing}, ${detection.shelf}, ${detection.label}")
         // detection.bay
         // detection.shelf
         // detection.facing
         // detection.label
         // detection.cropString
-        // }
+         }
         Log.d("Detection", "Detected objects: ${payload.detections.size}")
-        Log.d("Detection", "Overview image path: ${payload.overviewImage}")
     }
 }
 

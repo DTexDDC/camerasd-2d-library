@@ -85,7 +85,7 @@ class ObjectDetectorHelper (
         val shrunkBitmap = shrinkBitmap(cameraRGB, imageRotation) //A bitmap of RGBA 640x640 size.
         RGBByteBuffer =
             RGBATORGBArray(shrunkBitmap) //A bitmap of RGB 640x640 size. THIS SHOULD NORMALISE AS WELL.
-
+        overviewImage = shrunkBitmap
         detect(RGBByteBuffer!!, screenWidth, screenHeight, shrunkBitmap)
 
         image.close()
@@ -214,7 +214,7 @@ class ObjectDetectorHelper (
                     "bay",
                     "bay",
                     boundingBox,
-                    "BayObject"
+                    null
                 )
                 if (one_cx == 0F) {
                     one_cx = cx
@@ -254,12 +254,13 @@ class ObjectDetectorHelper (
 //        return outputArr
 //    }
 
-    private fun createString(map: Bitmap, x: Float, y: Float, height: Float, width: Float): String {
-        val crop = Bitmap.createBitmap(map, x.toInt()+1, y.toInt()+1, (width-width*0.2).toInt(), (height.toInt()-height*0.2).toInt())
-        val stream = ByteArrayOutputStream()
-        crop.compress(Bitmap.CompressFormat.JPEG, 75, stream)
-        val cropCompressedArray = stream.toByteArray()
-        return Base64.encodeToString(cropCompressedArray, Base64.NO_WRAP)
+    private fun createString(map: Bitmap, x: Float, y: Float, height: Float, width: Float): Bitmap {
+        val crop = Bitmap.createBitmap(map, x.toInt(), y.toInt(), (width).toInt(), (height).toInt())
+//        val stream = ByteArrayOutputStream()
+//        crop.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+//        val cropCompressedArray = stream.toByteArray()
+//        return Base64.encodeToString(cropCompressedArray, Base64.NO_WRAP)
+        return crop
     }
 
     private fun shrinkBitmap(map: Bitmap, rotation: Int): Bitmap {
@@ -407,39 +408,39 @@ private fun saveBitmapToFile(context: Context, bitmap: Bitmap, fileName: String 
                     labelIndex = j
                 }
             }
-            if ( transposedArray[i*outputColumn]*640f *(screenWidth/640f) < 300f) {
-                Log.d("filtered out", "${transposedArray[i*outputColumn]*640f *(screenWidth/640f) }, ${maxConfidence}")
-//                    continue
-            }
+//            if ( transposedArray[i*outputColumn]*640f *(screenWidth/640f) < 300f) {
+//                Log.d("filtered out", "${transposedArray[i*outputColumn]*640f *(screenWidth/640f) }, ${maxConfidence}")
+////                    continue
+//            }
 //            val x = result[i]
 //            val y = result[i+8400]
 //            Log.d("TAG", "filterBox: $x, $y")
             if (maxConfidence > SCORE_THRESHOLD) {
-                var cx = transposedArray[i*outputColumn]*640f *(screenWidth/640f)
-                var cy = transposedArray[i*outputColumn+1]*640f *(screenHeight/640f)
-                var w = transposedArray[i*outputColumn+2]*640f *(screenWidth/640f)
-                var h = transposedArray[i*outputColumn+3]*640f *(screenHeight/640f)
+                var cx = transposedArray[i*outputColumn]*640f
+                var cy = transposedArray[i*outputColumn+1]*640f
+                var w = transposedArray[i*outputColumn+2]*640f
+                var h = transposedArray[i*outputColumn+3]*640f
                 var x1 = cx - w/2
                 var y1 = cy - h/2
                 var x2 = cx + w/2
                 var y2 = cy + h/2
                 val boundingBox = RectF(
-                    x1,
-                    y1,
-                    x2,
-                    y2
+                    x1*(screenWidth/640f),
+                    y1*(screenHeight/640f),
+                    x2*(screenWidth/640f),
+                    y2*(screenHeight/640f)
                 )
 //                Log.d("TAG", "filterBox: $left, $cy, $h, $top")
-//                if (x1 < 100f) {
-//                    Log.d("filtered out", "${x1}, ${y1}, ${x2}, ${y2}")
-////                    continue
-//                }
+                if (x1 < 0 || y1 < 0 || w < 0 || h < 0) {
+                    Log.d("filtered out", "${x1}, ${y1}, ${x2}, ${y2}")
+                    continue
+                }
                 val detection = DetectionObject(
                     maxConfidence,
                     labels[labelIndex],
                     labelsDisplay[labelIndex],
                     boundingBox,
-//                    createString(bitmap, x1*640f, y1*640f, h*640f, w*640f)
+                    createString(bitmap, x1, y1, h/2, w/2)
                 )
                 boxes.add(detection)
             }

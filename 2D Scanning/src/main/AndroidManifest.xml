@@ -10,7 +10,7 @@
         <activity
             android:name="com.example.datdt.scanningsdk2D.CameraActivity"
             android:exported="false"
-            android:theme="@style/Theme.MaterialComponents.DayNight.DarkActionBar" />
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
 
     </application>
 </manifest>

@@ -2,15 +2,16 @@
 
 package com.example.datdt.scanningsdk2D
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Bundle
 import android.util.Log
-import android.util.Size
 import android.view.Surface
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,6 +24,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,11 +43,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -61,49 +65,41 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.example.datdt.scanningsdk2D.ObjectDetectorHelper
-import com.example.datdt.scanningsdk2D.DisplayRotationHelper
+import com.example.datdt.scanningsdk2D.models.BayObject
 import com.example.datdt.scanningsdk2D.models.DetectionObject
+import com.example.datdt.scanningsdk2D.models.LabelObject
 import com.example.datdt.scanningsdk2D.models.ModelInfo
 import com.example.datdt.scanningsdk2D.models.ModelType
+import com.example.datdt.scanningsdk2D.models.ShelfObject
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.math.abs
-import java.security.SecureRandom
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.view.doOnLayout
-import com.example.datdt.scanningsdk2D.models.BayObject
-import com.example.datdt.scanningsdk2D.models.LabelObject
-import com.example.datdt.scanningsdk2D.models.ShelfObject
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
-import kotlin.math.sqrt
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import android.util.Size as Size1
+import androidx.compose.ui.geometry.Size as Size2
+import androidx.core.graphics.createBitmap
+
+var overviewImage: Bitmap? = null
 
 data class DetectionPayload(
     val detections: List<DetectionObject>,
-    val overviewImage: String // overview image of the whole scene
+    val overviewImage: Bitmap? // overview image of the whole scene
 )
 
 object DetectionSdk {
@@ -139,12 +135,17 @@ object CameraSdk {
 
 object DetectionManager {
     private val _detectionPayload = MutableStateFlow(
-        DetectionPayload(emptyList(), "")
+        DetectionPayload(emptyList(), null)
     )
     val detectionPayload: StateFlow<DetectionPayload> get() = _detectionPayload
 
     fun updateDetections(newPayload: DetectionPayload) {
-        _detectionPayload.value = newPayload
+        if (newPayload.overviewImage == null) {
+            Log.d("DetectionManager", "Is Null")
+        } else {
+            Log.d("DetectionManager", "Is Not Null")
+        }
+        _detectionPayload.value = DetectionPayload(newPayload.detections, overviewImage)
     }
 }
 
@@ -173,7 +174,7 @@ class CameraActivity : ComponentActivity() {
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelType) {
-    val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
+    val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -211,7 +212,7 @@ fun CameraPreview(
     var isScanning by remember { mutableStateOf(false) }
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
-    var preview by remember { mutableStateOf<androidx.camera.core.Preview?>(null) }
+    var preview by remember { mutableStateOf<Preview?>(null) }
     val executor = ContextCompat.getMainExecutor(context)
     val displayRotationHelper = DisplayRotationHelper(activity)
 
@@ -307,7 +308,7 @@ fun CameraPreview(
                                 cameraExecutor, ObjectDetectorHelper(
                                     context = context,
                                     modelInfo = modelInfo,
-                                    resultViewSize = Size(640, 640),
+                                    resultViewSize = Size1(640, 640),
                                     activity = activity,
                                     imageRotation = imageRotation, // Set correctly for your use case
                                     screenWidth = sizeWidth.toInt(),
@@ -318,7 +319,7 @@ fun CameraPreview(
                                 })
                         }
                     }, executor)
-                preview = androidx.camera.core.Preview.Builder().build().also {
+                preview = Preview.Builder().build().also {
                     it.surfaceProvider = previewView.surfaceProvider
                 }
                 previewView
@@ -409,7 +410,7 @@ fun CameraPreview(
                                     x = detectionObject.boundingBox.left,
                                     y = detectionObject.boundingBox.top
                                 ),
-                                size = androidx.compose.ui.geometry.Size(
+                                size = Size2(
                                     width = detectionObject.boundingBox.width(),
                                     height = detectionObject.boundingBox.height()
                                 ),
@@ -431,7 +432,8 @@ fun CameraPreview(
         // --- Overlay Buttons ---
         Column (
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
                 .padding(50.dp)
         ) {
             Row(
@@ -441,7 +443,10 @@ fun CameraPreview(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
-                    onClick = { isScanning = !isScanning },
+                    onClick = { isScanning = !isScanning
+                                Log.d("Size check", "${objectResultsAll.size}")
+                                val tempimage = overviewImage
+                              if (!isScanning){sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage)}},
                     modifier = Modifier.widthIn(min = 100.dp)
                 ) {
                     Text(if (isScanning) "Stop" else "Start")
@@ -460,8 +465,12 @@ fun CameraPreview(
             Button(
                 onClick = {
                     coroutineScope.cancel()
-                    DetectionManager.updateDetections(DetectionPayload(emptyList(), "end"))
+                    val conf = Bitmap.Config.ARGB_8888 // see other conf types
+                    val bmp = createBitmap(100, 100, conf)
+                    DetectionManager.updateDetections(DetectionPayload(emptyList(), null))
                     Log.d("Finish", "Finished SDK")
+                    DetectionManager.updateDetections(DetectionPayload(emptyList(), bmp))
+
                 },
                 modifier = Modifier.widthIn(min = 100.dp)
             ) {
@@ -469,6 +478,74 @@ fun CameraPreview(
             }
         }
     }
+}
+
+fun sendData(objectResultsAll: SnapshotStateList<DetectionObject>, shelfResultsAll: SnapshotStateList<ShelfObject>,
+             bayResultsAll: SnapshotStateList<BayObject>, tempimage: Bitmap?) {
+    val shelfy: List<ShelfObject> = shelfResultsAll.sortedBy { it.boundingBox.centerY()}
+    val shelfy_len = shelfy.size
+    for (i in 0 until shelfy_len) {
+        shelfy[i].id = shelfy_len - i
+//          Log.d("Shelf_Details", "${shelfy[i].worldPosition?.pose?.ty()!!}, ${shelfy[i].id}")
+    }
+
+    for (obj in objectResultsAll) {
+        val y = obj.boundingBox.centerY()
+//          Log.d("Shelf_Details", "${obj.worldPosition?.pose?.ty()!!}")
+        for (s in 0 until shelfy_len) {
+            if (s == shelfy_len - 1) {
+                obj.shelf = shelfy[s].id
+                break
+            }
+            if (y < shelfy[s + 1].boundingBox.centerY() && y > shelfy[s].boundingBox.centerY()) {
+                obj.shelf = shelfy[s].id
+                break
+            }
+        }
+    }
+    // 1) Group items by their shelf ID
+    val byShelf: Map<Int, List<DetectionObject>> = objectResultsAll.groupBy { it.shelf }
+
+    // 2) For each shelf, sort by x and assign facing = (index + 1)
+    byShelf.forEach { (_, group) ->
+        group
+            .sortedBy { it.boundingBox.centerX() }         // left (small x) → right (large x)
+            .forEachIndexed { idx, item ->
+                item.facing = idx + 1
+            }
+    }
+//    val orderedPoints = bayResultsAll.sortedBy { it.endpointLeft }
+//    for (i in orderedPoints.indices step 2) {
+//        if (i >= orderedPoints.size || i+1 >= orderedPoints.size) {
+//            break
+//        }
+//        bayResultsAll.add(BayObject(bayResultsAll.size+1, orderedPoints[i], orderedPoints[i+1]))
+//    }
+//    bayResultsPoints.clear()
+    Log.d("Filtering in", "${objectResultsAll.size}")
+    for (obj in objectResultsAll) {
+//        for (b in bayResultsAll) {
+//            val objx = obj.boundingBox.centerX()
+//            val bLeft = b.endpointLeft
+//            val bRight = b.endpointRight
+//            if (bLeft == null || bRight == null) {
+//            } else {
+//                if (objx > bLeft && objx < bRight) {
+//                    obj.bay = b.id
+//                    Log.d("Shelf_Details", "Bay exists, ${bLeft}, ${bRight}")
+//                }
+//            }
+        obj.bay = 1
+//        }
+        Log.d("Shelf_Details", "${obj.shelf}, ${obj.facing}, ${obj.bay}")
+    }
+    if (objectResultsAll == null) {
+        return
+    }
+    if (tempimage != null) {
+        Log.d("SendData", "Not Null")
+    }
+    DetectionManager.updateDetections(DetectionPayload(objectResultsAll, tempimage))
 }
 
 fun dynamicThreshold(boundingBox: RectF, baseThreshold: Float = 67f): Float {
