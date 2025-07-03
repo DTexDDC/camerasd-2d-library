@@ -1,5 +1,6 @@
 package com.example.datdt.scanningsdk2D
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -21,6 +22,7 @@ import com.example.datdt.scanningsdk2D.CameraScreen
 import com.example.datdt.scanningsdk2D.models.ModelType
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
+import androidx.core.graphics.createBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
@@ -56,7 +58,9 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.Main).launch {
                 DetectionManager.detectionPayload
                     .collect { payload ->
-                        if (payload.detections.size == 0) {
+                        val conf = Bitmap.Config.ARGB_8888 // see other conf types
+                        val bmp = createBitmap(100, 100, conf)
+                        if (payload.detections.isEmpty() && payload.overviewImage == null) {
                             // Handle SDK completion
                             Log.d("Main", "No detections")
                             // Example: Finish activity

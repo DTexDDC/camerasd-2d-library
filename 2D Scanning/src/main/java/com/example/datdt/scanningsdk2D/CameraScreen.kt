@@ -134,18 +134,20 @@ object CameraSdk {
 }
 
 object DetectionManager {
+    val conf = Bitmap.Config.ARGB_8888 // see other conf types
+    val bmp = createBitmap(100, 100, conf)
     private val _detectionPayload = MutableStateFlow(
-        DetectionPayload(emptyList(), null)
+        DetectionPayload(emptyList(), bmp)
     )
     val detectionPayload: StateFlow<DetectionPayload> get() = _detectionPayload
 
     fun updateDetections(newPayload: DetectionPayload) {
-        if (newPayload.overviewImage == null) {
-            Log.d("DetectionManager", "Is Null")
-        } else {
-            Log.d("DetectionManager", "Is Not Null")
-        }
-        _detectionPayload.value = DetectionPayload(newPayload.detections, overviewImage)
+//        if (newPayload.overviewImage == null) {
+//            Log.d("DetectionManager", "Is Null")
+//        } else {
+//            Log.d("DetectionManager", "Is Not Null")
+//        }
+        _detectionPayload.value = DetectionPayload(newPayload.detections, newPayload.overviewImage)
     }
 }
 
@@ -446,7 +448,10 @@ fun CameraPreview(
                     onClick = { isScanning = !isScanning
                                 Log.d("Size check", "${objectResultsAll.size}")
                                 val tempimage = overviewImage
-                              if (!isScanning){sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage)}},
+                              if (!isScanning){sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage)}
+                            synchronized(objectResultsAll) { objectResultsAll.clear() }
+                            synchronized(shelfResultsAll) { shelfResultsAll.clear() }
+                            synchronized(labelResultsAll) { labelResultsAll.clear() }},
                     modifier = Modifier.widthIn(min = 100.dp)
                 ) {
                     Text(if (isScanning) "Stop" else "Start")
@@ -465,12 +470,8 @@ fun CameraPreview(
             Button(
                 onClick = {
                     coroutineScope.cancel()
-                    val conf = Bitmap.Config.ARGB_8888 // see other conf types
-                    val bmp = createBitmap(100, 100, conf)
                     DetectionManager.updateDetections(DetectionPayload(emptyList(), null))
                     Log.d("Finish", "Finished SDK")
-                    DetectionManager.updateDetections(DetectionPayload(emptyList(), bmp))
-
                 },
                 modifier = Modifier.widthIn(min = 100.dp)
             ) {
