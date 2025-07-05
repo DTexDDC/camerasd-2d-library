@@ -1,4 +1,4 @@
-package com.example.datdt.scanningsdk2D.ui.theme
+package com.example.datdt.scanningapp2D.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

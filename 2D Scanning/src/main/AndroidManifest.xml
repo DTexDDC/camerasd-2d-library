@@ -1,16 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--<manifest xmlns:android="http://schemas.android.com/apk/res/android">-->
+<!--    <uses-feature android:name="android.hardware.camera" android:required="true" />-->
+
+<!--    <uses-permission android:name="android.permission.CAMERA"/>-->
+<!--    <uses-permission android:name="android.permission.RECORD_AUDIO"/>-->
+<!--    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>-->
+<!--    <application>-->
+
+<!--        <activity-->
+<!--            android:name="com.example.datdt.scanningsdk2D.CameraActivity"-->
+<!--            android:exported="false"-->
+<!--            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />-->
+
+<!--    </application>-->
+<!--</manifest>-->
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-feature android:name="android.hardware.camera" android:required="true" />
 
-    <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <application>
+<uses-feature android:name="android.hardware.camera" android:required="true" />
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
-        <activity
-            android:name="com.example.datdt.scanningsdk2D.CameraActivity"
-            android:exported="false"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+<application>
+    <activity
+        android:name=".CameraActivity"
+        android:exported="false" />
+</application>
 
-    </application>
 </manifest>

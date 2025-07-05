@@ -81,7 +81,6 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,6 +93,7 @@ import kotlin.math.min
 import android.util.Size as Size1
 import androidx.compose.ui.geometry.Size as Size2
 import androidx.core.graphics.createBitmap
+import com.example.datdt.scanningsdk2D.DetectionManager.conf
 
 var overviewImage: Bitmap? = null
 
@@ -119,10 +119,17 @@ object DetectionSdk {
         fun start() {
             CameraSdk.launchCamera(context, modelType)
         }
+
+        fun end() {
+            CameraSdk.closeCamera()
+        }
+
     }
 }
 
 object CameraSdk {
+    var sdkActivity: Activity? = null
+
     @Composable
     fun StartDetection(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelType = ModelType.DEFAULT) {
         CameraScreen(modifier = modifier, modelType = modelType)
@@ -130,6 +137,15 @@ object CameraSdk {
 
     fun launchCamera(context: Context, modelType: ModelType = ModelType.DEFAULT) {
         CameraActivity.start(context, modelType)
+    }
+
+    fun register(activity: Activity) {
+        sdkActivity = activity
+    }
+
+    fun closeCamera() {
+        sdkActivity?.finish()
+        sdkActivity = null
     }
 }
 
@@ -141,20 +157,26 @@ object DetectionManager {
     )
     val detectionPayload: StateFlow<DetectionPayload> get() = _detectionPayload
 
-    fun updateDetections(newPayload: DetectionPayload) {
+    fun updateDetections(newPayload: DetectionPayload?) {
 //        if (newPayload.overviewImage == null) {
 //            Log.d("DetectionManager", "Is Null")
 //        } else {
 //            Log.d("DetectionManager", "Is Not Null")
 //        }
-        _detectionPayload.value = DetectionPayload(newPayload.detections, newPayload.overviewImage)
+        if (newPayload != null) {
+            _detectionPayload.value = DetectionPayload(newPayload.detections, newPayload.overviewImage)
+        }
+    }
+
+    fun clear() {
+        _detectionPayload.value = DetectionPayload(emptyList(), bmp)
     }
 }
 
 class CameraActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        CameraSdk.register(this)
         val modelType = intent?.getSerializableExtra(EXTRA_MODEL_TYPE) as? ModelType ?: ModelType.DEFAULT
 
         setContent {
@@ -179,6 +201,7 @@ fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelTy
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = CameraSdk.sdkActivity ?: return
 
     Scaffold { padding ->
         TopAppBar(
@@ -191,6 +214,7 @@ fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelTy
             CameraPreview(
                 context,
                 lifecycleOwner,
+                activity,
                 cameraExecutor = Executors.newSingleThreadExecutor(),
                 modelInfo = modelType.getModelInfo(),
             )
@@ -206,6 +230,7 @@ fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelTy
 fun CameraPreview(
     context: Context,
     lifecycleOwner: LifecycleOwner,
+    activity: Activity,
     cameraExecutor: ExecutorService,
     modelInfo: ModelInfo,
 ) {
@@ -469,7 +494,12 @@ fun CameraPreview(
             }
             Button(
                 onClick = {
-                    coroutineScope.cancel()
+                    // Only close the CameraActivity cleanly
+                    val conf = Bitmap.Config.ARGB_8888 // see other conf types
+                    val bmp = createBitmap(100, 100, conf)
+                    if (activity != null) {
+                        DetectionSdk.with(activity).end()
+                    }
                     DetectionManager.updateDetections(DetectionPayload(emptyList(), null))
                     Log.d("Finish", "Finished SDK")
                 },

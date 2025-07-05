@@ -97,6 +97,7 @@ implementation("org.tensorflow:tensorflow-lite-gpu:2.9.0")
 //    implementation("com.google.android.gms:play-services-tflite-gpu:16.2.0")
 // CameraX core library using the camera2 implementation
 // The following line is optional, as the core library is included indirectly by camera-camera2
+implementation ("androidx.appcompat:appcompat:1.6.1")
 implementation("androidx.camera:camera-core:${camerax_version}")
 implementation("androidx.camera:camera-camera2:${camerax_version}")
 // If you want to additionally use the CameraX Lifecycle library

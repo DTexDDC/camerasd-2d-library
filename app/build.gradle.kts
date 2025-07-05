@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.datdt.scanningsdk2D"
+    namespace = "com.example.datdt.scanningapp2D"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.datdt.scanningsdk2D"
+        applicationId = "com.example.datdt.scanningapp2D"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
