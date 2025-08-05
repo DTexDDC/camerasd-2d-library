@@ -43,6 +43,8 @@ import android.content.ContentValues
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.OutputStream
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 
 typealias ObjectDetectorCallback = (image: List<DetectionObject>) -> Unit
 
@@ -57,9 +59,9 @@ class ObjectDetectorHelper (
     private val callback: ObjectDetectorCallback,
     ) : ImageAnalysis.Analyzer {
     val SCORE_THRESHOLD: Float = 0.55f;
-    val NUM_CHANNELS: Int = 34;
+//    val NUM_CHANNELS: Int = 34;
     val NUM_ELEMENTS: Int = 8400
-
+    var class_nums: Int = 0
     private var interpreter: Interpreter? = null
     private var detectedProducts = mutableListOf<DetectionObject>()
     private val labels = mutableListOf<String>()
@@ -83,10 +85,12 @@ class ObjectDetectorHelper (
         val cameraRGB: Bitmap = createBitmap(image.image!!.width, image.image!!.height)
         rgbConverter?.yuvToRgb(image.image!!, cameraRGB)
         val shrunkBitmap = shrinkBitmap(cameraRGB, imageRotation) //A bitmap of RGBA 640x640 size.
+        val fullBitmap = rotateBitmap(cameraRGB, imageRotation)
         RGBByteBuffer =
             RGBATORGBArray(shrunkBitmap) //A bitmap of RGB 640x640 size. THIS SHOULD NORMALISE AS WELL.
-        overviewImage = shrunkBitmap
-        detect(RGBByteBuffer!!, screenWidth, screenHeight, shrunkBitmap)
+        overviewImage = fullBitmap
+//        saveBitmapToFile(context, fullBitmap)
+        detect(RGBByteBuffer!!, screenWidth, screenHeight, shrunkBitmap, fullBitmap)
 
         image.close()
     }
@@ -116,44 +120,50 @@ class ObjectDetectorHelper (
         val options1 = Interpreter.Options().setNumThreads(7)
         interpreter = Interpreter(FileUtil.loadMappedFile(context, modelInfo.modelPath), options1)
         interpreter?.allocateTensors()
-        val options2 = Interpreter.Options().setNumThreads(3)
-        bayInterpreter = Interpreter(FileUtil.loadMappedFile(context, "mixers-endpoints-tfl-v2_float32.tflite"), options2)
-        bayInterpreter?.allocateTensors()
-        //Setup the bay detector.
-//        tfLiteOptions.setNumThreads(3)
-//        bayInterpreter = Interpreter(FileUtil.loadMappedFile(context, "mixers-endpoints-tfl-v2_float32.tflite"), tfLiteOptions)
+        val outputTensor = interpreter?.getOutputTensor(0)
+        val dims = outputTensor?.shape()
+        class_nums = dims?.get(1)!!
     }
 
-    private fun detect(imageArray: ByteBuffer, screenWidth: Int, screenHeight: Int, bitmap: Bitmap) {
-        val outputBuffer = ByteBuffer.allocateDirect(NUM_ELEMENTS* NUM_CHANNELS * 4).order(ByteOrder.nativeOrder())
+    private fun detect(imageArray: ByteBuffer, screenWidth: Int, screenHeight: Int, bitmap: Bitmap, fullBitmap: Bitmap) {
+        val outputBuffer = ByteBuffer.allocateDirect(NUM_ELEMENTS* class_nums * 4).order(ByteOrder.nativeOrder())
 
         //Output buffer for the bay endpoints.
-        val outputBayBuffer = ByteBuffer.allocateDirect(5*8400*4).order(ByteOrder.nativeOrder())
+//        val outputBayBuffer = ByteBuffer.allocateDirect(5*8400*4).order(ByteOrder.nativeOrder())
         try {
-            interpreter?.run(imageArray, outputBuffer)
-            bayInterpreter?.run(imageArray, outputBayBuffer)
-        } catch (e: Exception) {
+//            CoroutineScope(Dispatchers.Default).launch {
+                interpreter?.run(imageArray, outputBuffer)
+//                bayInterpreter?.run(imageArray, outputBayBuffer)
+//                val job1 = async { interpreter?.run(imageArray, outputBuffer) }
+//                val job2 = async { bayInterpreter?.run(imageArray, outputBayBuffer) }
+//                job1.await()
+//                job2.await()
+                outputBuffer.rewind()
+//                outputBayBuffer.rewind()
+//            }
+            } catch (e: Exception) {
             e.printStackTrace()
         }
-        outputBuffer.rewind()
-        outputBayBuffer.rewind()
-        val outputArray = FloatArray(NUM_CHANNELS* NUM_ELEMENTS)
-        val outputBayArray = FloatArray(5*8400)
+        val outputArray = FloatArray(class_nums* NUM_ELEMENTS)
+//        val outputBayArray = FloatArray(5*8400)
         outputBuffer.asFloatBuffer().get(outputArray)
-        outputBayBuffer.asFloatBuffer().get(outputBayArray)
+//        outputBayBuffer.asFloatBuffer().get(outputBayArray)
 
         if (outputArray.isEmpty() || outputArray.size == 1) {
             callback(mutableListOf())
         }
-
-        val filteredBoxes = filterBox(outputArray, screenWidth, screenHeight, bitmap)
-//        val filteredBays = filterBays(outputBayArray, screenWidth, screenHeight, 90)
-//        for (obj in filteredBays) {
-//            filteredBoxes.add(obj)
+        CoroutineScope(Dispatchers.Default).launch {
+//            val job1 = async { filterBays(outputBayArray, screenWidth, screenHeight, 90) }
+            val filteredBoxes =
+                filterBox(outputArray, screenWidth, screenHeight, bitmap, fullBitmap)
+//            val filteredBays = job1.await()
+//            for (obj in filteredBays) {
+//                filteredBoxes.add(obj)
 ////            Log.d("Bay Update", "${obj.boundingBox.left}")
-//        }
+//            }
 //        Log.d("Detection Number", "${filteredBoxes.size}")
-        callback(filteredBoxes)
+            callback(filteredBoxes)
+        }
 //        return filteredBoxes
     }
 
@@ -260,11 +270,30 @@ class ObjectDetectorHelper (
 //        crop.compress(Bitmap.CompressFormat.JPEG, 75, stream)
 //        val cropCompressedArray = stream.toByteArray()
 //        return Base64.encodeToString(cropCompressedArray, Base64.NO_WRAP)
+//        saveBitmapToFile(context, crop)
         return crop
     }
 
     private fun shrinkBitmap(map: Bitmap, rotation: Int): Bitmap {
         val resizedBitmap = map.scale(640, 640, true)
+        val matrix = Matrix().apply {
+            postRotate(90f)
+        }
+        val newBitMap = Bitmap.createBitmap(
+            resizedBitmap,
+            0,
+            0,
+            resizedBitmap.width,
+            resizedBitmap.height,
+            matrix,
+            true  // 'true' applies a filtering (smoothing) while rotating
+        )
+//        saveBitmapToFile(context, newBitMap, "processed_for_model.jpg")
+        return newBitMap
+    }
+
+    private fun rotateBitmap(map: Bitmap, rotation: Int): Bitmap {
+        val resizedBitmap = map.scale(map.width, map.height, true)
         val matrix = Matrix().apply {
             postRotate(90f)
         }
@@ -365,7 +394,10 @@ class ObjectDetectorHelper (
 //        inputImage.rewind()
 //        return inputImage
 //    }
-private fun saveBitmapToFile(context: Context, bitmap: Bitmap, fileName: String = "processed_image.jpg") {
+private fun saveBitmapToFile(context: Context, bitmap: Bitmap, fileNamePrefix: String = "processed_image") {
+    val timestamp = System.currentTimeMillis()
+    val fileName = "$fileNamePrefix$timestamp.jpg"
+
     val contentValues = ContentValues().apply {
         put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
         put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
@@ -385,20 +417,20 @@ private fun saveBitmapToFile(context: Context, bitmap: Bitmap, fileName: String 
     }
 }
 
-    private fun filterBox(result: FloatArray, screenWidth: Int, screenHeight: Int, bitmap: Bitmap): MutableList<DetectionObject> {
+    private fun filterBox(result: FloatArray, screenWidth: Int, screenHeight: Int, bitmap: Bitmap, fullBitmap: Bitmap): MutableList<DetectionObject> {
         val boxes: MutableList<DetectionObject> = mutableListOf()
-        val transposedArray: MutableList<Float> = MutableList(NUM_CHANNELS* NUM_ELEMENTS) { 0F }
+        val transposedArray: MutableList<Float> = MutableList(class_nums* NUM_ELEMENTS) { 0F }
 //        val result = inferenceResult.flatten().flatMap { it.toList() }
-        for (row in 0 until 34) {
+        for (row in 0 until class_nums) {
             for (col in 0 until 8400) {
                 val oldIndex = row * 8400 + col
-                val newIndex = col * 34 + row
+                val newIndex = col * class_nums + row
                 transposedArray[newIndex] = result[oldIndex]
             }
         }
 
         val outputRow = 8400
-        val outputColumn = 34
+        val outputColumn = class_nums
         for (i in 0 until outputRow) {
             var maxConfidence = SCORE_THRESHOLD
             var labelIndex = 0
@@ -430,9 +462,11 @@ private fun saveBitmapToFile(context: Context, bitmap: Bitmap, fileName: String 
                     x2*(screenWidth/640f),
                     y2*(screenHeight/640f)
                 )
+                // 2024 - screenHeight
+                // 1080 - screenWidth
 //                Log.d("TAG", "filterBox: $left, $cy, $h, $top")
-                if (x1 < 0 || y1 < 0 || w < 0 || h < 0) {
-                    Log.d("filtered out", "${x1}, ${y1}, ${x2}, ${y2}")
+                if (x1 < 0 || y1 < 0 || x1 + w > 640 || y1 + h > 640) {
+//                    Log.d("filtered out", "${boundingBox.height()}, ${boundingBox.bottom}, ${boundingBox.right}, ${boundingBox.width()}")
                     continue
                 }
                 val detection = DetectionObject(
@@ -440,7 +474,7 @@ private fun saveBitmapToFile(context: Context, bitmap: Bitmap, fileName: String 
                     labels[labelIndex],
                     labelsDisplay[labelIndex],
                     boundingBox,
-                    createString(bitmap, x1, y1, h/2, w/2)
+                    createString(fullBitmap, x1*(fullBitmap.width/640f), y1*(fullBitmap.height/640f), h*(fullBitmap.height/640f), w*(fullBitmap.width/640f))
                 )
                 boxes.add(detection)
             }

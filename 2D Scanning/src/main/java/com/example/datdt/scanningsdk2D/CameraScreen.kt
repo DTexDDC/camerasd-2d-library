@@ -10,6 +10,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Surface
@@ -72,7 +73,7 @@ import com.example.datdt.scanningsdk2D.models.BayObject
 import com.example.datdt.scanningsdk2D.models.DetectionObject
 import com.example.datdt.scanningsdk2D.models.LabelObject
 import com.example.datdt.scanningsdk2D.models.ModelInfo
-import com.example.datdt.scanningsdk2D.models.ModelType
+//import com.example.datdt.scanningsdk2D.models.ModelType
 import com.example.datdt.scanningsdk2D.models.ShelfObject
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
@@ -93,7 +94,13 @@ import kotlin.math.min
 import android.util.Size as Size1
 import androidx.compose.ui.geometry.Size as Size2
 import androidx.core.graphics.createBitmap
-import com.example.datdt.scanningsdk2D.DetectionManager.conf
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.AspectRatio
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.core.Camera
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 var overviewImage: Bitmap? = null
 
@@ -109,10 +116,17 @@ object DetectionSdk {
     }
 
     class Builder(private val context: Context) {
-        private var modelType: ModelType = ModelType.DEFAULT
+        private var modelType: ModelInfo = ModelInfo(
+            modelPath = "output_float32.tflite",
+            labelPath = "output_float32_labels.txt",
+            labels_displayPath = "labels_display.txt"
+        )
 
-        fun model(modelType: ModelType): Builder {
-            this.modelType = modelType
+        fun model(modelType: ModelInfo): Builder {
+            if (modelType != null) {
+                this.modelType = modelType
+                return this
+            }
             return this
         }
 
@@ -131,11 +145,11 @@ object CameraSdk {
     var sdkActivity: Activity? = null
 
     @Composable
-    fun StartDetection(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelType = ModelType.DEFAULT) {
+    fun StartDetection(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelInfo) {
         CameraScreen(modifier = modifier, modelType = modelType)
     }
 
-    fun launchCamera(context: Context, modelType: ModelType = ModelType.DEFAULT) {
+    fun launchCamera(context: Context, modelType: ModelInfo) {
         CameraActivity.start(context, modelType)
     }
 
@@ -158,11 +172,15 @@ object DetectionManager {
     val detectionPayload: StateFlow<DetectionPayload> get() = _detectionPayload
 
     fun updateDetections(newPayload: DetectionPayload?) {
-//        if (newPayload.overviewImage == null) {
-//            Log.d("DetectionManager", "Is Null")
-//        } else {
-//            Log.d("DetectionManager", "Is Not Null")
-//        }
+        if (newPayload != null) {
+            if (newPayload.overviewImage == null) {
+                Log.d("DetectionManager", "Is Null")
+            } else {
+                Log.d("DetectionManager", "Is Not Null")
+            }
+        } else {
+            Log.d("DetectionManager", "Full Null")
+        }
         if (newPayload != null) {
             _detectionPayload.value = DetectionPayload(newPayload.detections, newPayload.overviewImage)
         }
@@ -177,19 +195,25 @@ class CameraActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CameraSdk.register(this)
-        val modelType = intent?.getSerializableExtra(EXTRA_MODEL_TYPE) as? ModelType ?: ModelType.DEFAULT
-
+        val modelInfo: ModelInfo? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra("extra_model_info", ModelInfo::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra("extra_model_info")
+        }
         setContent {
-            CameraSdk.StartDetection(modelType = modelType)
+            modelInfo?.let {
+                CameraSdk.StartDetection(modelType = it)
+            }
         }
     }
 
     companion object {
-        private const val EXTRA_MODEL_TYPE = "extra_model_type"
+//        private const val EXTRA_MODEL_TYPE = "extra_model_type"
 
-        fun start(context: Context, modelType: ModelType = ModelType.DEFAULT) {
+        fun start(context: Context, modelType: ModelInfo) {
             val intent = Intent(context, CameraActivity::class.java)
-            intent.putExtra(EXTRA_MODEL_TYPE, modelType)
+            intent.putExtra("extra_model_info", modelType)
             context.startActivity(intent)
         }
     }
@@ -197,7 +221,7 @@ class CameraActivity : ComponentActivity() {
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelType) {
+fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelInfo) {
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -207,7 +231,7 @@ fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelTy
         TopAppBar(
             modifier = modifier.padding(padding),
             title = {
-                Text(modelType.name)
+                Text(modelType.modelPath)
             }
         )
         if (cameraPermissionState.status.isGranted) {
@@ -216,7 +240,7 @@ fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelTy
                 lifecycleOwner,
                 activity,
                 cameraExecutor = Executors.newSingleThreadExecutor(),
-                modelInfo = modelType.getModelInfo(),
+                modelInfo = modelType,
             )
         } else {
             Permission(cameraPermissionState)
@@ -225,7 +249,7 @@ fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelTy
 }
 
 @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
-@SuppressLint("ContextCastToActivity")
+@SuppressLint("ContextCastToActivity", "CoroutineCreationDuringComposition")
 @Composable
 fun CameraPreview(
     context: Context,
@@ -237,6 +261,9 @@ fun CameraPreview(
     val coroutineScope = MainScope()
     val activity = LocalContext.current as? Activity
     var isScanning by remember { mutableStateOf(false) }
+    val previewViewRef = remember { mutableStateOf<PreviewView?>(null) }
+    val imageAnalyzerRef = remember { mutableStateOf<ImageAnalysis?>(null) }
+    val cameraRef = remember { mutableStateOf<Camera?>(null) }
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
     var preview by remember { mutableStateOf<Preview?>(null) }
@@ -250,6 +277,9 @@ fun CameraPreview(
     val shelfResultsAll = remember { mutableStateListOf<ShelfObject>() }
     val bayResultsAll = remember { mutableStateListOf<BayObject>() }
     val labelResultsAll = remember { mutableStateListOf<LabelObject>() }
+    var bay_num = 1
+    var shelf_offset = 0
+    var facing_offset = mutableListOf<Int>()
 
     val paint = Paint()
     val pathColorList = listOf(
@@ -298,7 +328,8 @@ fun CameraPreview(
                 val previewView = PreviewView(ctx).apply {
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 }
-                _objectResultsTemp.value = emptyList()
+                previewViewRef.value = previewView
+//                _objectResultsTemp.value = emptyList()
                 Log.d("herehere", "${isScanning}")
                     cameraProviderFuture.addListener({
                         val cameraProvider = cameraProviderFuture.get()
@@ -306,17 +337,31 @@ fun CameraPreview(
                         val preview = Preview.Builder().build().also {
                             it.setSurfaceProvider(previewView.surfaceProvider)
                         }
+                        val resolutionSelector = ResolutionSelector.Builder()
+                            .setAspectRatioStrategy(
+                                AspectRatioStrategy(
+                                    AspectRatio.RATIO_16_9,
+                                    AspectRatioStrategy.FALLBACK_RULE_AUTO
+                                )
+                            )
+                            .setResolutionStrategy(
+                                ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
+                            )
+                            .build()
 
                         val imageCapture = ImageCapture.Builder()
-                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                            .setResolutionSelector(resolutionSelector)
+                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                             .setTargetRotation(Surface.ROTATION_0)
                             .build()
 
                         val imageAnalyzer = ImageAnalysis.Builder()
+                            .setResolutionSelector(resolutionSelector)
                             .setTargetRotation(Surface.ROTATION_0)
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                             .build()
 
+                        imageAnalyzerRef.value = imageAnalyzer
                         val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
                         previewView.doOnLayout {
@@ -327,23 +372,25 @@ fun CameraPreview(
                                 imageCapture,
                                 imageAnalyzer
                             )
-
-                            val cameraId = Camera2CameraInfo.from(camera.cameraInfo).cameraId
-                            val imageRotation =
-                                displayRotationHelper.getCameraSensorToDisplayRotation(cameraId)
-                            imageAnalyzer.setAnalyzer(
-                                cameraExecutor, ObjectDetectorHelper(
-                                    context = context,
-                                    modelInfo = modelInfo,
-                                    resultViewSize = Size1(640, 640),
-                                    activity = activity,
-                                    imageRotation = imageRotation, // Set correctly for your use case
-                                    screenWidth = sizeWidth.toInt(),
-                                    screenHeight = sizeHeight.toInt()
-                                ) { detectionObjects ->
-                                    // handle detection results here
-                                    _objectResultsTemp.value = detectionObjects
-                                })
+                            cameraRef.value = camera
+//                            if (currentIsScanning) {
+//                                val cameraId = Camera2CameraInfo.from(camera.cameraInfo).cameraId
+//                                val imageRotation =
+//                                    displayRotationHelper.getCameraSensorToDisplayRotation(cameraId)
+//                                imageAnalyzer.setAnalyzer(
+//                                    cameraExecutor, ObjectDetectorHelper(
+//                                        context = context,
+//                                        modelInfo = modelInfo,
+//                                        resultViewSize = Size1(640, 640),
+//                                        activity = activity,
+//                                        imageRotation = imageRotation, // Set correctly for your use case
+//                                        screenWidth = sizeWidth.toInt(),
+//                                        screenHeight = sizeHeight.toInt()
+//                                    ) { detectionObjects ->
+//                                        // handle detection results here
+//                                        _objectResultsTemp.value = detectionObjects
+//                                    })
+//                            }
                         }
                     }, executor)
                 preview = Preview.Builder().build().also {
@@ -352,6 +399,39 @@ fun CameraPreview(
                 previewView
             }
         )
+        if (isScanning) {
+            CoroutineScope(Dispatchers.Default).launch {
+                val imageAnalyzer = imageAnalyzerRef.value
+                val camera = cameraRef.value
+                val previewView = previewViewRef.value
+
+                if (imageAnalyzer != null && camera != null && previewView != null) {
+//                    _objectResultsTemp.value = emptyList()
+                    val cameraId = Camera2CameraInfo.from(camera.cameraInfo).cameraId
+                    val imageRotation =
+                        displayRotationHelper.getCameraSensorToDisplayRotation(cameraId)
+
+                    imageAnalyzer.setAnalyzer(
+                        cameraExecutor,
+                        ObjectDetectorHelper(
+                            context = context,
+                            modelInfo = modelInfo,
+                            resultViewSize = Size1(640, 640),
+                            activity = activity,
+                            imageRotation = imageRotation,
+                            screenWidth = sizeWidth.toInt(),
+                            screenHeight = sizeHeight.toInt()
+                        ) { detectionObjects ->
+                            _objectResultsTemp.value = detectionObjects
+                        }
+                    )
+//                } else {
+//                    imageAnalyzer.clearAnalyzer()
+//                }
+                }
+            }
+        }
+
         val objectResultsTemp by _objectResultsTemp.collectAsState()
         LaunchedEffect(objectResultsTemp) {
                 delay(50)
@@ -362,8 +442,12 @@ fun CameraPreview(
                         var overlap_shelf = false
                         val obj_bbox = obj.boundingBox
 
-                        if (obj.label == "bay") {
-                            // Bay logic here...
+                        if (obj.label == "end_point") {
+                            for (b in bayResultsAll) {
+                                if (obj.boundingBox.centerX()- b.endpointLeft!! > 150f) {
+                                    bayResultsAll.add(BayObject(0, obj.boundingBox.centerX()))
+                                }
+                            }
                         } else if (obj.label == "label") {
                             synchronized(labelResultsAll) {
                                 for (item in labelResultsAll) {
@@ -384,7 +468,7 @@ fun CameraPreview(
                                     shelfResultsAll.add(ShelfObject(obj.boundingBox))
                                 }
                             }
-                        } else if (obj.label == "shelf stripping") {
+                        } else if (obj.label == "shelf") {
                             overlap = true
                         } else {
                             synchronized(objectResultsAll) {
@@ -471,15 +555,23 @@ fun CameraPreview(
             ) {
                 Button(
                     onClick = { isScanning = !isScanning
-                                Log.d("Size check", "${objectResultsAll.size}")
+//                                Log.d("Size check", "${objectResultsAll.size}")
                                 val tempimage = overviewImage
-                              if (!isScanning){sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage)}
+                              if (!isScanning){
+                                  val (temp_shelf_offset, temp_facing_offset) = sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage, shelf_offset, facing_offset, bay_num)
+                                  facing_offset = facing_offset
+                                  if (facing_offset.isEmpty()) {
+                                      shelf_offset = temp_shelf_offset
+                                  } else {
+                                      shelf_offset = 0
+                                  }
+                              }
                             synchronized(objectResultsAll) { objectResultsAll.clear() }
                             synchronized(shelfResultsAll) { shelfResultsAll.clear() }
                             synchronized(labelResultsAll) { labelResultsAll.clear() }},
                     modifier = Modifier.widthIn(min = 100.dp)
                 ) {
-                    Text(if (isScanning) "Stop" else "Start")
+                    Text(if (isScanning) "Pause" else "Start")
                 }
 
                 Button(
@@ -487,9 +579,12 @@ fun CameraPreview(
                         synchronized(objectResultsAll) { objectResultsAll.clear() }
                         synchronized(shelfResultsAll) { shelfResultsAll.clear() }
                         synchronized(labelResultsAll) { labelResultsAll.clear() }
+                        shelf_offset = 0
+                        facing_offset.clear()
+                        bay_num += 1
                     }, modifier = Modifier.widthIn(min = 100.dp)
                 ) {
-                    Text("Reset")
+                    Text("Next Bay")
                 }
             }
             Button(
@@ -512,14 +607,13 @@ fun CameraPreview(
 }
 
 fun sendData(objectResultsAll: SnapshotStateList<DetectionObject>, shelfResultsAll: SnapshotStateList<ShelfObject>,
-             bayResultsAll: SnapshotStateList<BayObject>, tempimage: Bitmap?) {
+             bayResultsAll: SnapshotStateList<BayObject>, tempimage: Bitmap?, shelf_offset: Int, facing_offset: MutableList<Int>, bay_num: Int): Pair<Int, MutableList<Int>> {
     val shelfy: List<ShelfObject> = shelfResultsAll.sortedBy { it.boundingBox.centerY()}
     val shelfy_len = shelfy.size
     for (i in 0 until shelfy_len) {
-        shelfy[i].id = shelfy_len - i
+        shelfy[i].id = shelfy_len - i + shelf_offset
 //          Log.d("Shelf_Details", "${shelfy[i].worldPosition?.pose?.ty()!!}, ${shelfy[i].id}")
     }
-
     for (obj in objectResultsAll) {
         val y = obj.boundingBox.centerY()
 //          Log.d("Shelf_Details", "${obj.worldPosition?.pose?.ty()!!}")
@@ -536,14 +630,41 @@ fun sendData(objectResultsAll: SnapshotStateList<DetectionObject>, shelfResultsA
     }
     // 1) Group items by their shelf ID
     val byShelf: Map<Int, List<DetectionObject>> = objectResultsAll.groupBy { it.shelf }
+    val lastObject = objectResultsAll.maxByOrNull { it.boundingBox.centerX() }
+    var scanned_full_shelf_length = false
+    var k = 0
+    for (bay in bayResultsAll) {
+        k += 1
+        if (lastObject != null) {
+            if (bay.endpointLeft!! >= lastObject.boundingBox.centerX()) {
+                scanned_full_shelf_length = true
+                break
+            }
 
+        }
+    }
+    Log.d("Bay Number", "${k}")
+    var facing_offset_new = mutableListOf<Int>()
     // 2) For each shelf, sort by x and assign facing = (index + 1)
+    var offset = 0
+    var i = 0
     byShelf.forEach { (_, group) ->
+        if (facing_offset.isNotEmpty() && i < facing_offset.size) {
+            offset = facing_offset.get(i)
+            i += 1
+        }
         group
             .sortedBy { it.boundingBox.centerX() }         // left (small x) → right (large x)
             .forEachIndexed { idx, item ->
-                item.facing = idx + 1
+                item.facing = idx + 1 + offset
             }
+        if (!scanned_full_shelf_length) {
+            group.maxByOrNull { it.boundingBox.centerX() }?.let { facing_offset_new.add(it.facing) }
+        }
+    }
+
+    if (scanned_full_shelf_length) {
+        facing_offset_new.clear()
     }
 //    val orderedPoints = bayResultsAll.sortedBy { it.endpointLeft }
 //    for (i in orderedPoints.indices step 2) {
@@ -566,17 +687,19 @@ fun sendData(objectResultsAll: SnapshotStateList<DetectionObject>, shelfResultsA
 //                    Log.d("Shelf_Details", "Bay exists, ${bLeft}, ${bRight}")
 //                }
 //            }
-        obj.bay = 1
+        obj.bay = bay_num
 //        }
         Log.d("Shelf_Details", "${obj.shelf}, ${obj.facing}, ${obj.bay}")
     }
     if (objectResultsAll == null) {
-        return
+        return Pair(shelf_offset, facing_offset)
     }
     if (tempimage != null) {
         Log.d("SendData", "Not Null")
     }
     DetectionManager.updateDetections(DetectionPayload(objectResultsAll, tempimage))
+
+    return Pair(shelfy_len, facing_offset_new)
 }
 
 fun dynamicThreshold(boundingBox: RectF, baseThreshold: Float = 67f): Float {

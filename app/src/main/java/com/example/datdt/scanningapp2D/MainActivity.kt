@@ -10,6 +10,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.datdt.scanningsdk2D.DetectionManager
 import com.example.datdt.scanningsdk2D.DetectionPayload
 import com.example.datdt.scanningsdk2D.DetectionSdk
+import com.example.datdt.scanningsdk2D.models.ModelInfo
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -18,42 +19,33 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        DetectionSdk.with(this).start()
+        val modelinfo = ModelInfo(modelPath = "tinned-food-product-on-scene-tfl-v1b_float32.tflite",
+            labelPath = "tinned_display.txt",
+            labels_displayPath = "tinned_display.txt")
+        modelinfo.let {
+            DetectionSdk.with(this)
+                .model(it)
+                .start()
+        }
 
         sdkReady = true
+
         observeDetections()
     }
 
-//    override fun onResume() {
-//        super.onResume()
-//
-//        if (CameraSdk.sdkActivity == null) {
-//            DetectionSdk.with(this).start()
-//        }
-//    }
-
-//    override fun onResume() {
-//        super.onResume()
-//
-//        if (CameraSdk.sdkActivity == null && detectionStarted) {
-//            detectionStarted = false // Reset flag to allow retry logic later if needed
-//
-//            // Send empty payload after SDK closes
-//            DetectionManager.updateDetections(DetectionPayload(emptyList(), null))
-//        }
-//    }
     private var alreadyHandled = false
     private fun observeDetections() {
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
+            repeatOnLifecycle(Lifecycle.State.CREATED) {
                 DetectionManager.detectionPayload.collect { payload ->
                     if (!sdkReady || payload == null || alreadyHandled) return@collect
 
                     if (payload.detections.isEmpty() && payload.overviewImage == null) {
                         alreadyHandled = true
-                        Log.d("MainActivity", "No detections, ending SDK")
-//                        DetectionSdk.with(this@MainActivity).end()
+//                        Log.d("Main Detections", "No detections, ending SDK")
                         DetectionManager.clear()
+
+                        // Whatever activity that you have launch it here.
                         startActivity(Intent(this@MainActivity, RetryActivity::class.java))
                         finish()
                     } else {
@@ -67,12 +59,17 @@ class MainActivity : AppCompatActivity() {
     private fun handleDetectionResults(payload: DetectionPayload) {
         // Example: Log detections (You should process them as before)
          for (detection in payload.detections) {
-             Log.d("Main", "${detection.facing}, ${detection.shelf}, ${detection.label}")
-        // detection.bay
-        // detection.shelf
-        // detection.facing
-        // detection.label
-        // detection.cropString
+//             Log.d("Main Detections", "${detection.facing}, ${detection.shelf}, ${detection.label}")
+            // detection.bay
+            // detection.shelf
+            // detection.facing
+            // detection.label
+            // detection.cropString
+            // detection.score (Confidence)
+            // detection.labelDisplay (Display Label)
+            // detection.boundingBox.centerX() (X)
+            // detection.boundingBox.centerY() (Y)
+
          }
         Log.d("Detection", "Detected objects: ${payload.detections.size}")
     }
