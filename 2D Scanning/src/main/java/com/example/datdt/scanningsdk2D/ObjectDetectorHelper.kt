@@ -45,6 +45,8 @@ import android.provider.MediaStore
 import java.io.OutputStream
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import java.io.FileInputStream
+import java.nio.channels.FileChannel
 
 typealias ObjectDetectorCallback = (image: List<DetectionObject>) -> Unit
 
@@ -113,12 +115,24 @@ class ObjectDetectorHelper (
 //        interpreter?.allocateTensors()
         labels.clear()
         labelsDisplay.clear()
-        labels.addAll(FileUtil.loadLabels(context, modelInfo.labelPath))
-        labelsDisplay.addAll(FileUtil.loadLabels(context, modelInfo.labels_displayPath))
+//        labels.addAll(FileUtil.loadLabels(context, modelInfo.labelPath))
+//        labelsDisplay.addAll(FileUtil.loadLabels(context, modelInfo.labels_displayPath))
+        val labelsFile = File(modelInfo.labelPath)
+        labels.addAll(labelsFile.readLines())
+        val labelsDisplayFile = File(modelInfo.labels_displayPath)
+        labelsDisplay.addAll(labelsDisplayFile.readLines())
+
 
         rgbConverter = activity?.let { YuvToRgbConverter(it) }
         val options1 = Interpreter.Options().setNumThreads(7)
-        interpreter = Interpreter(FileUtil.loadMappedFile(context, modelInfo.modelPath), options1)
+
+//        interpreter = Interpreter(FileUtil.loadMappedFile(context, modelInfo.modelPath), options1)
+        val file = File(modelInfo.modelPath)
+        val inputStream = FileInputStream(file)
+        val fileChannel = inputStream.channel
+        val mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, file.length())
+        interpreter = Interpreter(mappedByteBuffer, options1)
+
         interpreter?.allocateTensors()
         val outputTensor = interpreter?.getOutputTensor(0)
         val dims = outputTensor?.shape()

@@ -1,5 +1,6 @@
 package com.example.datdt.scanningapp2D
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -12,6 +13,9 @@ import com.example.datdt.scanningsdk2D.DetectionPayload
 import com.example.datdt.scanningsdk2D.DetectionSdk
 import com.example.datdt.scanningsdk2D.models.ModelInfo
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.IOException
+import java.io.FileOutputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -19,9 +23,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val modelinfo = ModelInfo(modelPath = "tinned-food-product-on-scene-tfl-v1b_float32.tflite",
-            labelPath = "tinned_display.txt",
-            labels_displayPath = "tinned_display.txt")
+        // The modelFile and labelFile store the file object of .tflite and .txt.
+        // The function copyAssetToInternalStorage is a custom one to test since I didn't have API access. Don't use it.
+        val modelFile = copyAssetToInternalStorage(this, "tinned-food-product-on-scene-tfl-v1b_float32.tflite", "tinned-food-product-on-scene-tfl-v1b_float32.tflite")
+        val labelFile = copyAssetToInternalStorage(this, "tinned_display.txt", "tinned_display.txt")
+
+        // Pass in the absolute path of the files from above.
+        val modelinfo = ModelInfo(modelPath = modelFile!!.absolutePath,
+            labelPath = labelFile!!.absolutePath,
+            labels_displayPath = labelFile!!.absolutePath)
+
+//        val modelinfo = ModelInfo(modelPath = "tinned-food-product-on-scene-tfl-v1b_float32.tflite",
+//            labelPath = "tinned_display.txt",
+//            labels_displayPath = "tinned_display.txt")
         modelinfo.let {
             DetectionSdk.with(this)
                 .model(it)
@@ -72,6 +86,25 @@ class MainActivity : AppCompatActivity() {
 
          }
         Log.d("Detection", "Detected objects: ${payload.detections.size}")
+    }
+}
+
+
+
+fun copyAssetToInternalStorage(context: Context, assetFileName: String, outputFileName: String): File? {
+    return try {
+        val file = File(context.filesDir, outputFileName)
+        if (!file.exists()) {
+            context.assets.open(assetFileName).use { inputStream ->
+                FileOutputStream(file).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+        }
+        file
+    } catch (e: IOException) {
+        e.printStackTrace()
+        null
     }
 }
 
