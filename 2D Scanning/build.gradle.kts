@@ -111,6 +111,8 @@ implementation("androidx.camera:camera-view:${camerax_version}")
 //    implementation("androidx.camera:camera-mlkit-vision:${camerax_version}")
 // If you want to additionally use the CameraX Extensions library
 implementation("androidx.camera:camera-extensions:${camerax_version}")
+
+//    implementation("org.yaml:snakeyaml:2.2")
 }
 
 afterEvaluate {
@@ -121,7 +123,7 @@ afterEvaluate {
 
                 groupId = "com.github.DTexDDC"
                 artifactId = "camerasdk-2D-library"
-                version = "1.0.1" // or the tag you're pushing to GitHub
+                version = "1.1.1" // or the tag you're pushing to GitHub
             }
         }
     }

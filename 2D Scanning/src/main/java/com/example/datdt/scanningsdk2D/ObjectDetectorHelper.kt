@@ -47,6 +47,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import java.io.FileInputStream
 import java.nio.channels.FileChannel
+//import org.yaml.snakeyaml.Yaml
 
 typealias ObjectDetectorCallback = (image: List<DetectionObject>) -> Unit
 
@@ -118,9 +119,14 @@ class ObjectDetectorHelper (
 //        labels.addAll(FileUtil.loadLabels(context, modelInfo.labelPath))
 //        labelsDisplay.addAll(FileUtil.loadLabels(context, modelInfo.labels_displayPath))
         val labelsFile = File(modelInfo.labelPath)
-        labels.addAll(labelsFile.readLines())
+        labels.addAll(labelsFile
+            .readLines()
+            .filter { it.isNotBlank() }) // remove empty lines
+//        labels.addAll(labelsFile.readLines())
         val labelsDisplayFile = File(modelInfo.labels_displayPath)
-        labelsDisplay.addAll(labelsDisplayFile.readLines())
+        labelsDisplay.addAll(labelsDisplayFile
+            .readLines()
+            .filter { it.isNotBlank() })
 
 
         rgbConverter = activity?.let { YuvToRgbConverter(it) }
