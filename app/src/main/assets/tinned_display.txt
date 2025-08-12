@@ -1,4 +1,0 @@
-product
-label
-end_point
-shelf
