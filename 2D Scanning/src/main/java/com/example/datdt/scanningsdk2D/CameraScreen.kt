@@ -219,6 +219,9 @@ class CameraActivity : ComponentActivity() {
     }
 }
 
+@Volatile
+var isProcessing = false
+
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(modifier: Modifier = Modifier.fillMaxSize(), modelType: ModelInfo) {
@@ -258,6 +261,7 @@ fun CameraPreview(
     cameraExecutor: ExecutorService,
     modelInfo: ModelInfo,
 ) {
+
     val coroutineScope = MainScope()
     val activity = LocalContext.current as? Activity
     var isScanning by remember { mutableStateOf(false) }
@@ -338,20 +342,23 @@ fun CameraPreview(
                             it.setSurfaceProvider(previewView.surfaceProvider)
                         }
                         val resolutionSelector = ResolutionSelector.Builder()
-                            .setAspectRatioStrategy(
-                                AspectRatioStrategy(
-                                    AspectRatio.RATIO_16_9,
-                                    AspectRatioStrategy.FALLBACK_RULE_AUTO
-                                )
-                            )
+//                            .setAspectRatioStrategy(
+//                                AspectRatioStrategy(
+//                                    AspectRatio.RATIO_16_9,
+//                                    AspectRatioStrategy.FALLBACK_RULE_AUTO
+//                                )
+//                            )
                             .setResolutionStrategy(
-                                ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
+                                ResolutionStrategy(
+                                    Size1(640, 480), // lowest common supported resolution
+                                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER
+                                )
                             )
                             .build()
 
                         val imageCapture = ImageCapture.Builder()
                             .setResolutionSelector(resolutionSelector)
-                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                             .setTargetRotation(Surface.ROTATION_0)
                             .build()
 
@@ -559,7 +566,7 @@ fun CameraPreview(
                                 val tempimage = overviewImage
                               if (!isScanning){
                                   val (temp_shelf_offset, temp_facing_offset) = sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage, shelf_offset, facing_offset, bay_num)
-                                  facing_offset = facing_offset
+                                  facing_offset = temp_facing_offset
                                   if (facing_offset.isEmpty()) {
                                       shelf_offset = temp_shelf_offset
                                   } else {

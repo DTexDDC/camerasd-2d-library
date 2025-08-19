@@ -85,17 +85,21 @@ class ObjectDetectorHelper (
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(image: ImageProxy) {
         if (image.image == null) return
-        val cameraRGB: Bitmap = createBitmap(image.image!!.width, image.image!!.height)
-        rgbConverter?.yuvToRgb(image.image!!, cameraRGB)
-        val shrunkBitmap = shrinkBitmap(cameraRGB, imageRotation) //A bitmap of RGBA 640x640 size.
-        val fullBitmap = rotateBitmap(cameraRGB, imageRotation)
-        RGBByteBuffer =
-            RGBATORGBArray(shrunkBitmap) //A bitmap of RGB 640x640 size. THIS SHOULD NORMALISE AS WELL.
-        overviewImage = fullBitmap
+        if (!isProcessing) {
+            isProcessing = true
+            val cameraRGB: Bitmap = createBitmap(image.image!!.width, image.image!!.height)
+            rgbConverter?.yuvToRgb(image.image!!, cameraRGB)
+            val shrunkBitmap =
+                shrinkBitmap(cameraRGB, imageRotation) //A bitmap of RGBA 640x640 size.
+            val fullBitmap = rotateBitmap(cameraRGB, imageRotation)
+            RGBByteBuffer =
+                RGBATORGBArray(shrunkBitmap) //A bitmap of RGB 640x640 size. THIS SHOULD NORMALISE AS WELL.
+            overviewImage = fullBitmap
 //        saveBitmapToFile(context, fullBitmap)
-        detect(RGBByteBuffer!!, screenWidth, screenHeight, shrunkBitmap, fullBitmap)
-
-        image.close()
+            detect(RGBByteBuffer!!, screenWidth, screenHeight, shrunkBitmap, fullBitmap)
+            isProcessing = false
+            image.close()
+        }
     }
 
     public fun clearDetectedProducts() {
