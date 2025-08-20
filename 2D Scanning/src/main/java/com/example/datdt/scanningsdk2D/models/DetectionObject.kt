@@ -10,7 +10,7 @@ data class DetectionObject(
     val label: String,
     val labelDisplay: String,
     val boundingBox: RectF,
-    val cropString: Bitmap?,
+    val cropString: String?,
     var shelf: Int = 0,
     var facing: Int = 0,
     var bay: Int = 0

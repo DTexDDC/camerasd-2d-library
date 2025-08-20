@@ -62,6 +62,17 @@ class MainActivity : AppCompatActivity() {
         observeDetections()
     }
 
+    override fun onResume() {
+        super.onResume()
+
+    // If CameraActivity is finished and we flagged "no detections"
+        if (CameraSdk.sdkActivity == null && alreadyHandled) {
+            alreadyHandled = false // reset for future runs
+            startActivity(Intent(this, RetryActivity::class.java))
+            finish()
+        }
+    }
+
     private var alreadyHandled = false
     private fun observeDetections() {
         lifecycleScope.launch {
@@ -75,8 +86,9 @@ class MainActivity : AppCompatActivity() {
                         DetectionManager.clear()
 
                         // Whatever activity that you have launch it here.
-                        startActivity(Intent(this@MainActivity, RetryActivity::class.java))
-                        finish()
+                        Log.d("Main Detections", "No detections, will retry after SDK closes")
+//                        startActivity(Intent(this@MainActivity, RetryActivity::class.java))
+//                        finish()
                     } else {
                         handleDetectionResults(payload)
                     }

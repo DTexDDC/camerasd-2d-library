@@ -583,6 +583,9 @@ fun CameraPreview(
 
                 Button(
                     onClick = {
+                        val tempimage = overviewImage
+                        val (temp_shelf_offset, temp_facing_offset) = sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage, shelf_offset, facing_offset, bay_num)
+
                         synchronized(objectResultsAll) { objectResultsAll.clear() }
                         synchronized(shelfResultsAll) { shelfResultsAll.clear() }
                         synchronized(labelResultsAll) { labelResultsAll.clear() }
@@ -597,6 +600,15 @@ fun CameraPreview(
             Button(
                 onClick = {
                     // Only close the CameraActivity cleanly
+                    val tempimage = overviewImage
+                    val (temp_shelf_offset, temp_facing_offset) = sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage, shelf_offset, facing_offset, bay_num)
+                    facing_offset = temp_facing_offset
+                    if (facing_offset.isEmpty()) {
+                        shelf_offset = temp_shelf_offset
+                    } else {
+                        shelf_offset = 0
+                    }
+
                     val conf = Bitmap.Config.ARGB_8888 // see other conf types
                     val bmp = createBitmap(100, 100, conf)
                     if (activity != null) {

@@ -288,14 +288,14 @@ class ObjectDetectorHelper (
 //        return outputArr
 //    }
 
-    private fun createString(map: Bitmap, x: Float, y: Float, height: Float, width: Float): Bitmap {
+    private fun createString(map: Bitmap, x: Float, y: Float, height: Float, width: Float): String {
         val crop = Bitmap.createBitmap(map, x.toInt(), y.toInt(), (width).toInt(), (height).toInt())
-//        val stream = ByteArrayOutputStream()
-//        crop.compress(Bitmap.CompressFormat.JPEG, 75, stream)
-//        val cropCompressedArray = stream.toByteArray()
-//        return Base64.encodeToString(cropCompressedArray, Base64.NO_WRAP)
+        val stream = ByteArrayOutputStream()
+        crop.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+        val cropCompressedArray = stream.toByteArray()
+        return Base64.encodeToString(cropCompressedArray, Base64.NO_WRAP)
 //        saveBitmapToFile(context, crop)
-        return crop
+//        return crop
     }
 
     private fun shrinkBitmap(map: Bitmap, rotation: Int): Bitmap {
