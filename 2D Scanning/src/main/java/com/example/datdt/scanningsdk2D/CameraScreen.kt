@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -95,18 +94,26 @@ import android.util.Size as Size1
 import androidx.compose.ui.geometry.Size as Size2
 import androidx.core.graphics.createBitmap
 import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.AspectRatio
-import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.core.Camera
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import android.util.Base64
 
-var overviewImage: Bitmap? = null
+var overviewImage: String? = null
 
 data class DetectionPayload(
     val detections: List<DetectionObject>,
-    val overviewImage: Bitmap? // overview image of the whole scene
+    val overviewImage: String? // overview image of the whole scene
 )
 
 object DetectionSdk {
@@ -165,7 +172,8 @@ object CameraSdk {
 
 object DetectionManager {
     val conf = Bitmap.Config.ARGB_8888 // see other conf types
-    val bmp = createBitmap(100, 100, conf)
+    val original = "None"
+    val bmp = Base64.encodeToString(original.toByteArray(), Base64.DEFAULT)
     private val _detectionPayload = MutableStateFlow(
         DetectionPayload(emptyList(), bmp)
     )
@@ -261,7 +269,6 @@ fun CameraPreview(
     cameraExecutor: ExecutorService,
     modelInfo: ModelInfo,
 ) {
-
     val coroutineScope = MainScope()
     val activity = LocalContext.current as? Activity
     var isScanning by remember { mutableStateOf(false) }
@@ -273,7 +280,7 @@ fun CameraPreview(
     var preview by remember { mutableStateOf<Preview?>(null) }
     val executor = ContextCompat.getMainExecutor(context)
     val displayRotationHelper = DisplayRotationHelper(activity)
-
+    var loading by remember { mutableStateOf(false) }
     val _objectResultsTemp = MutableStateFlow<List<DetectionObject>>(emptyList())
 //    val objectResultsTemp: StateFlow<List<DetectionObject>> = _objectResultsTemp.asStateFlow()
     val objectResultsAdd = remember { mutableStateListOf<DetectionObject>() }
@@ -318,6 +325,10 @@ fun CameraPreview(
         android.graphics.Color.rgb(0.5f, 0.0f, 0.5f),  // 0.5, 0.0, 0.5 RGB
         android.graphics.Color.rgb(0.6f, 0.4f, 0.2f),  // 0.6, 0.4, 0.2 RGB
     )
+
+//    while (loading%2 == 1) {
+//        loadingScreen()
+//    }
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize()
@@ -441,7 +452,10 @@ fun CameraPreview(
 
         val objectResultsTemp by _objectResultsTemp.collectAsState()
         LaunchedEffect(objectResultsTemp) {
-                delay(50)
+            loading = false
+            delay(1000)
+            loading = true
+//            delay(100)
             if (isScanning && objectResultsTemp.isNotEmpty()) {
                 withContext(Dispatchers.Default) {
                     for (obj in objectResultsTemp) {
@@ -547,86 +561,184 @@ fun CameraPreview(
                     }
                 }
             )
+        if (loading && isScanning) {
+            loadingScreen(loading)
+        }
+        var buttonClick = false
         // --- Overlay Buttons ---
-        Column (
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Surface(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(50.dp)
+                .align(Alignment.BottomCenter),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = Color.White,
+            border = BorderStroke(2.dp, Color(0xFFE0E0E0)),
+            tonalElevation = 2.dp
         ) {
-            Row(
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .padding(5.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(20.dp)
             ) {
-                Button(
-                    onClick = { isScanning = !isScanning
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            isScanning = !isScanning
 //                                Log.d("Size check", "${objectResultsAll.size}")
-                                val tempimage = overviewImage
-                              if (!isScanning){
-                                  val (temp_shelf_offset, temp_facing_offset) = sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage, shelf_offset, facing_offset, bay_num)
-                                  facing_offset = temp_facing_offset
-                                  if (facing_offset.isEmpty()) {
-                                      shelf_offset = temp_shelf_offset
-                                  } else {
-                                      shelf_offset = 0
-                                  }
-                              }
+                            val tempimage = overviewImage
+                            if (!isScanning) {
+                                val (temp_shelf_offset, temp_facing_offset) = sendData(
+                                    objectResultsAll,
+                                    shelfResultsAll,
+                                    bayResultsAll,
+                                    tempimage,
+                                    shelf_offset,
+                                    facing_offset,
+                                    bay_num
+                                )
+                                facing_offset = temp_facing_offset
+                                if (facing_offset.isEmpty()) {
+                                    shelf_offset = temp_shelf_offset
+                                } else {
+                                    shelf_offset = 0
+                                }
+                            }
+                            synchronized(objectResultsAll) { objectResultsAll.clear() }
+//                            synchronized(shelfResultsAll) { shelfResultsAll.clear() }
+                            synchronized(labelResultsAll) { labelResultsAll.clear() }
+                            _objectResultsTemp.value = emptyList()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!isScanning) Color(0xFFEE6F1F) else Color.White,
+                            contentColor = if (!isScanning) Color.White else Color.Black
+                        ),
+                        border = if (isScanning) BorderStroke(0.5.dp, Color.LightGray) else BorderStroke(0.dp, Color.White),
+                        shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+                        modifier = Modifier.fillMaxWidth(0.5f)
+                                            .padding(5.dp)
+                    ) {
+                        Text(if (isScanning) "Pause" else "Start", fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            buttonClick = true
+                            val tempimage = overviewImage
+                            val (temp_shelf_offset, temp_facing_offset) = sendData(
+                                objectResultsAll,
+                                shelfResultsAll,
+                                bayResultsAll,
+                                tempimage,
+                                shelf_offset,
+                                facing_offset,
+                                bay_num
+                            )
+
                             synchronized(objectResultsAll) { objectResultsAll.clear() }
                             synchronized(shelfResultsAll) { shelfResultsAll.clear() }
-                            synchronized(labelResultsAll) { labelResultsAll.clear() }},
-                    modifier = Modifier.widthIn(min = 100.dp)
-                ) {
-                    Text(if (isScanning) "Pause" else "Start")
+                            synchronized(labelResultsAll) { labelResultsAll.clear() }
+                            _objectResultsTemp.value = emptyList()
+                            shelf_offset = 0
+                            facing_offset.clear()
+                            bay_num += 1
+                            buttonClick = false
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!buttonClick) Color(0xFFEE6F1F) else Color.White,
+                            contentColor = if (!buttonClick) Color.White else Color.Black
+                        ),
+                        shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+                        modifier = Modifier.fillMaxWidth(1f)
+                            .padding(5.dp)
+                    ) {
+                        Text("Next Bay", fontWeight = FontWeight.Bold)
+                    }
                 }
-
                 Button(
                     onClick = {
+                        buttonClick = true
+                        // Only close the CameraActivity cleanly
                         val tempimage = overviewImage
-                        val (temp_shelf_offset, temp_facing_offset) = sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage, shelf_offset, facing_offset, bay_num)
+                        val (temp_shelf_offset, temp_facing_offset) = sendData(
+                            objectResultsAll,
+                            shelfResultsAll,
+                            bayResultsAll,
+                            tempimage,
+                            shelf_offset,
+                            facing_offset,
+                            bay_num
+                        )
+                        facing_offset = temp_facing_offset
+                        if (facing_offset.isEmpty()) {
+                            shelf_offset = temp_shelf_offset
+                        } else {
+                            shelf_offset = 0
+                        }
 
-                        synchronized(objectResultsAll) { objectResultsAll.clear() }
-                        synchronized(shelfResultsAll) { shelfResultsAll.clear() }
-                        synchronized(labelResultsAll) { labelResultsAll.clear() }
-                        shelf_offset = 0
-                        facing_offset.clear()
-                        bay_num += 1
-                    }, modifier = Modifier.widthIn(min = 100.dp)
+                        val conf = Bitmap.Config.ARGB_8888 // see other conf types
+                        val bmp = createBitmap(100, 100, conf)
+                        if (activity != null) {
+                            DetectionSdk.with(activity).end()
+                        }
+                        DetectionManager.updateDetections(DetectionPayload(emptyList(), null))
+                        Log.d("Finish", "Finished SDK")
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!buttonClick) Color(0xFFF5F5F5) else Color(0xFFEE6F1F),
+                        contentColor = if (!buttonClick) Color.Black else Color.White
+                    ),
+                    border = BorderStroke(0.5.dp, Color.LightGray),
+                    shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+                    modifier = Modifier.fillMaxWidth(1f)
                 ) {
-                    Text("Next Bay")
+                    Text("Finish", fontWeight = FontWeight.Bold)
                 }
-            }
-            Button(
-                onClick = {
-                    // Only close the CameraActivity cleanly
-                    val tempimage = overviewImage
-                    val (temp_shelf_offset, temp_facing_offset) = sendData(objectResultsAll, shelfResultsAll, bayResultsAll, tempimage, shelf_offset, facing_offset, bay_num)
-                    facing_offset = temp_facing_offset
-                    if (facing_offset.isEmpty()) {
-                        shelf_offset = temp_shelf_offset
-                    } else {
-                        shelf_offset = 0
-                    }
-
-                    val conf = Bitmap.Config.ARGB_8888 // see other conf types
-                    val bmp = createBitmap(100, 100, conf)
-                    if (activity != null) {
-                        DetectionSdk.with(activity).end()
-                    }
-                    DetectionManager.updateDetections(DetectionPayload(emptyList(), null))
-                    Log.d("Finish", "Finished SDK")
-                },
-                modifier = Modifier.widthIn(min = 100.dp)
-            ) {
-                Text("Finish")
             }
         }
     }
 }
 
-fun sendData(objectResultsAll: SnapshotStateList<DetectionObject>, shelfResultsAll: SnapshotStateList<ShelfObject>,
-             bayResultsAll: SnapshotStateList<BayObject>, tempimage: Bitmap?, shelf_offset: Int, facing_offset: MutableList<Int>, bay_num: Int): Pair<Int, MutableList<Int>> {
+@Composable
+fun loadingScreen(scan: Boolean) {
+    if (scan) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .wrapContentSize()
+                    .background(
+                        Color.White.copy(alpha = 0.5f), // 50% transparent black
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .padding(50.dp)
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFFEE6F1F),
+                        strokeWidth = 2.dp,
+                    )
+                    Text("Scanning", fontWeight = FontWeight.Bold, color = Color.Black)
+                    Text("Loading detections...", color = Color.Black)
+                }
+            }
+        }
+    }
+}
+
+fun sendData(
+    objectResultsAll: SnapshotStateList<DetectionObject>, shelfResultsAll: SnapshotStateList<ShelfObject>,
+    bayResultsAll: SnapshotStateList<BayObject>, tempimage: String?, shelf_offset: Int, facing_offset: MutableList<Int>, bay_num: Int): Pair<Int, MutableList<Int>> {
     val shelfy: List<ShelfObject> = shelfResultsAll.sortedBy { it.boundingBox.centerY()}
     val shelfy_len = shelfy.size
     for (i in 0 until shelfy_len) {

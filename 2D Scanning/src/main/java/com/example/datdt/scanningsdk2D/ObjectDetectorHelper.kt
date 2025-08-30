@@ -94,7 +94,10 @@ class ObjectDetectorHelper (
             val fullBitmap = rotateBitmap(cameraRGB, imageRotation)
             RGBByteBuffer =
                 RGBATORGBArray(shrunkBitmap) //A bitmap of RGB 640x640 size. THIS SHOULD NORMALISE AS WELL.
-            overviewImage = fullBitmap
+            val stream = ByteArrayOutputStream()
+            fullBitmap.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+            val cropCompressedArray = stream.toByteArray()
+            overviewImage = Base64.encodeToString(cropCompressedArray, Base64.NO_WRAP)
 //        saveBitmapToFile(context, fullBitmap)
             detect(RGBByteBuffer!!, screenWidth, screenHeight, shrunkBitmap, fullBitmap)
             isProcessing = false
